@@ -1,0 +1,189 @@
+Description: 
+   Service in project2 
+
+Parameters:
+
+  EnvironmentName:
+      Description: An environment name that will be prefixed to resource names
+      Type: String
+
+  AMItoUse:
+      Description: AMI to use for our base image
+      Type: String
+
+
+  BucketName:
+    Description: The bucket containing static website files
+    Type: String
+    Default: projectnada
+
+
+
+Resources:
+
+  LBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPC"
+      GroupDescription: Allow HTTP from anywhere, and HTTP to the Web Servers
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  
+
+  WebServerASGLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref AMItoUse
+      InstanceType: t2.medium
+      InstanceMonitoring: true
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-InstanceSecurity"
+      IamInstanceProfile: 
+        Fn::ImportValue: !Sub "${EnvironmentName}-InstanceProfile"
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 10
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt update -y
+          apt install apache2 awscli -y
+
+          systemctl start apache2.service
+          systemctl enable apache2.service
+          
+          rm -rf /var/www/html/index.html
+
+          
+
+          aws s3 cp s3://${BucketName}/index.html /var/www/html/index.html
+
+          cd /var/www/html
+
+          echo "              It works! Udagram, Udacity "  >> index.html 
+
+
+#Auto scaling group:  ##
+
+  TargetGroup:  #The Amazon Resource Names (ARN) of the Elastic *Load Balancing target groups* to associate with the Auto Scaling group.
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPC"
+      Port: 80
+      Protocol: HTTP
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: true
+    Properties:
+      LaunchConfigurationName: !Ref WebServerASGLaunchConfiguration
+      MaxSize: 4
+      MinSize: 2
+      DesiredCapacity: 2
+
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-Private-Subnet-1"
+        - Fn::ImportValue: !Sub "${EnvironmentName}-Private-Subnet-2"
+
+      TargetGroupARNs:
+        - !Ref TargetGroup
+
+  AutoScalingPolicy:  ## The metric type to be tracked, which for simplicity will be tracking the Average CPU Utilization of the ASG instances
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 30
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name:  "LoadBalancer"
+      Subnets:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-Public-Subnet1"
+        - Fn::ImportValue: !Sub "${EnvironmentName}-Public-Subnet2"
+      SecurityGroups:
+        - !Ref LBSecurityGroup
+  
+
+  LBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - "/*"    # any pattern
+      ListenerArn: !Ref LBListener
+      Priority: 1
+  
+
+  JumpboxSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPC"
+      GroupDescription: Allow SSH from anywhere
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  #more secure to be limited to my own ip 
+
+  Jumpbox:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref AMItoUse
+      SecurityGroupIds: 
+        - Ref: JumpboxSecurityGroup
+      SubnetId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-Public-Subnet1"
+     
+Outputs:
+
+  JumpboxPublicHostname:
+    Description: The Public IP Address of Jumpbox 
+    Value: !GetAtt Jumpbox.PublicIp
+
+
+  LoadBalancerDNSName:
+    Description: DNS Name of the web application
+    Value: !Join
+      - ""
+      - - "http://"
+        - !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub "${EnvironmentName}-ELB-DNS-Name"

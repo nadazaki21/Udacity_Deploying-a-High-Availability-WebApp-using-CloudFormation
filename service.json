@@ -1,0 +1,18 @@
+
+[
+
+    {
+		"ParameterKey": "EnvironmentName",
+		"ParameterValue": "UdacityProject"
+	},
+
+    {
+        "ParameterKey": "AMItoUse",
+        "ParameterValue": "ami-0574da719dca65348"
+    },
+    
+    {
+        "ParameterKey": "BucketName",
+        "ParameterValue": "projectnada"
+    }
+]

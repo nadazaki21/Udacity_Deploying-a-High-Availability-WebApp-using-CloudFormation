@@ -1,0 +1,56 @@
+[
+	{
+		"ParameterKey": "EnvironmentName",
+		"ParameterValue": "UdacityProject"
+	},
+
+    {
+        "ParameterKey": "VPCCIDR",
+        "ParameterValue": "10.0.0.0/16"
+    }, 
+
+    {
+        "ParameterKey": "PrivSubnet1CIDR",
+        "ParameterValue": "10.0.1.0/24"
+    },
+
+    {
+        "ParameterKey": "PrivSubnet2CIDR",
+        "ParameterValue": "10.0.2.0/24"
+    },
+
+    {
+        "ParameterKey": "PubSubnetCIDR1",
+        "ParameterValue": "10.0.3.0/24"
+    },
+
+    {
+        "ParameterKey": "PubSubnetCIDR2",
+        "ParameterValue": "10.0.4.0/24"
+    },
+
+
+    {
+        "ParameterKey": "AMItoUse",
+        "ParameterValue": "ami-0574da719dca65348"
+    },
+
+    {
+        "ParameterKey": "EC2Type",
+        "ParameterValue": "t2.medium"
+    },
+
+    
+    {
+        "ParameterKey": "AZ1",
+        "ParameterValue": "us-east-1a"
+    },
+
+    {
+        "ParameterKey": "AZ2",
+        "ParameterValue": "us-east-1b"
+    }
+
+    
+     
+]
